@@ -1,0 +1,497 @@
+<script>
+    let currentUser = null;
+async function register() {
+    let fio = document.getElementById('regFio').value;
+    let phone = document.getElementById('regPhone').value;
+    let email = document.getElementById('regEmail').value;
+    let login = document.getElementById('regLogin').value;
+    let password = document.getElementById('regPass').value;
+    let msgDiv = document.getElementById('regMsg');
+    if (!fio || !phone || !email || !login || !password) {
+        msgDiv.innerHTML = '❌ Заполните все поля!';
+        msgDiv.className = 'message error';
+        return;
+    }
+    let response = await fetch('/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login, password, fio, phone, email })
+    });
+    let data = await response.json();
+    if (data.success) {
+        msgDiv.innerHTML = data.message;
+        msgDiv.className = 'message success';
+        document.getElementById('regFio').value = '';
+        document.getElementById('regPhone').value = '';
+        document.getElementById('regEmail').value = '';
+        document.getElementById('regLogin').value = '';
+        document.getElementById('regPass').value = '';
+    } else {
+        msgDiv.innerHTML = '❌ ' + data.message;
+        msgDiv.className = 'message error';
+    }
+}
+async function login() {
+    let login = document.getElementById('authLogin').value;
+    let password = document.getElementById('authPass').value;
+    let msgDiv = document.getElementById('authMsg');    
+    if (!login || !password) {
+        msgDiv.innerHTML = '❌ Введите логин и пароль!';
+        msgDiv.className = 'message error';
+        return;
+    }  
+    let response = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login, password })
+    });
+    let data = await response.json();
+    if (data.success) {
+        currentUser = data.user;
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        window.location.href = 'profile.html';
+    } else {
+        msgDiv.innerHTML = '❌ ' + data.message;
+        msgDiv.className = 'message error';
+    }
+}
+async function adminLogin() {
+    let login = document.getElementById('adminLogin').value;
+    let password = document.getElementById('adminPass').value;
+    let msgDiv = document.getElementById('adminMsg');
+    if (!login || !password) {
+        msgDiv.innerHTML = '❌ Введите логин и пароль!';
+        msgDiv.className = 'message error';
+        return;
+    }
+    let response = await fetch('/admin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login, password })
+    });
+    let data = await response.json();
+    if (data.success) {
+        localStorage.setItem('isAdmin', 'true');
+        window.location.href = 'admin.html';
+    } else {
+        msgDiv.innerHTML = '❌ ' + data.message;
+        msgDiv.className = 'message error';
+    }
+}
+</script>
+<script>
+async function loadProfile() {
+    let savedUser = localStorage.getItem('currentUser');
+    if (!savedUser) {
+        window.location.href = 'index.html';
+        return;
+    }
+    currentUser = JSON.parse(savedUser);    
+    let userInfoDiv = document.getElementById('userInfo');
+    userInfoDiv.innerHTML = `
+        <p><strong>ФИО:</strong> ${currentUser.fio}</p>
+        <p><strong>Телефон:</strong> ${currentUser.phone}</p>
+        <p><strong>Email:</strong> ${currentUser.email}</p>
+        <p><strong>Логин:</strong> ${currentUser.login}</p>
+    `;    
+    let response = await fetch('/get-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id })
+    });    
+    let data = await response.json();
+    showOrders(data.orders);
+}
+function showOrders(orders) {
+    let ordersDiv = document.getElementById('ordersList');
+    if (orders.length === 0) {
+        ordersDiv.innerHTML = '<p style="text-align:center; color:#888;">У вас пока нет заявок</p>';
+        return;
+    }
+    ordersDiv.innerHTML = '';
+    for (let order of orders) {
+        let statusClass = '';
+        if (order.status === 'новая') statusClass = 'status-new';
+        else if (order.status === 'выполнена') statusClass = 'status-done';
+        else statusClass = 'status-cancel';
+        let statusText = '';
+        if (order.status === 'новая') statusText = '🟡 новая';
+        else if (order.status === 'выполнена') statusText = '🟢 выполнена';
+        else statusText = '🔴 отменена';
+        ordersDiv.innerHTML += `
+            <div class="order-item">
+                <strong>📅 ${order.date} ${order.time}</strong><br>
+                📍 ${order.address}<br>
+                🧹 ${order.service}<br>
+                💳 ${order.payment}<br>
+                <span class="order-status ${statusClass}">📌 ${statusText}</span>
+            </div>
+        `;
+    }
+}
+async function loadAdminPanel() {
+    let isAdmin = localStorage.getItem('isAdmin');
+    if (!isAdmin) {
+        window.location.href = 'index.html';
+        return;
+    }
+    let response = await fetch('/get-all-orders');
+    let data = await response.json();
+    showAllOrders(data.orders);
+}
+async function showAllOrders(orders) {
+    let ordersDiv = document.getElementById('allOrdersList');
+    if (orders.length === 0) {
+        ordersDiv.innerHTML = '<p style="text-align:center; color:#888;">Нет заявок</p>';
+        return;
+    }
+    ordersDiv.innerHTML = '';
+    for (let order of orders) {
+        let statusClass = '';
+        if (order.status === 'новая') statusClass = 'status-new';
+        else if (order.status === 'выполнена') statusClass = 'status-done';
+        else statusClass = 'status-cancel';    
+        let statusText = '';
+        if (order.status === 'новая') statusText = '🟡 новая';
+        else if (order.status === 'выполнена') statusText = '🟢 выполнена';
+        else statusText = '🔴 отменена';      
+        ordersDiv.innerHTML += `
+            <div class="order-item">
+                <strong>👤 Клиент:</strong> ${order.userFio}<br>
+                <strong>📞 Телефон:</strong> ${order.userPhone}<br>
+                <strong>📧 Email:</strong> ${order.userEmail}<br>
+                <strong>📅 Дата:</strong> ${order.date} ${order.time}<br>
+                <strong>📍 Адрес:</strong> ${order.address}<br>
+                <strong>🧹 Услуга:</strong> ${order.service}<br>
+                <strong>💳 Оплата:</strong> ${order.payment}<br>
+                <strong>📌 Статус:</strong> 
+                <select class="status-select" onchange="updateStatus(${order.id}, this.value)">
+                    <option value="новая" ${order.status === 'новая' ? 'selected' : ''}>🟡 новая</option>
+                    <option value="выполнена" ${order.status === 'выполнена' ? 'selected' : ''}>🟢 выполнена</option>
+                    <option value="отменена" ${order.status === 'отменена' ? 'selected' : ''}>🔴 отменена</option>
+                </select>
+                <span class="order-status ${statusClass}" style="margin-left:10px;">${statusText}</span>
+            </div>
+        `;
+    }
+}
+async function updateStatus(orderId, newStatus) {
+    let response = await fetch('/update-order-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status: newStatus })
+    });
+    let data = await response.json();
+    if (data.success) {
+        loadAdminPanel();
+    } else {
+        alert('Ошибка при обновлении статуса');
+    }
+}
+async function createOrder() {
+    let address = document.getElementById('orderAddress').value;
+    let date = document.getElementById('orderDate').value;
+    let time = document.getElementById('orderTime').value;
+    let service = document.getElementById('orderService').value;
+    let payment = document.getElementById('orderPayment').value;
+    let msgDiv = document.getElementById('orderMsg'); 
+    if (!address || !date || !time || !service || !payment) {
+        msgDiv.innerHTML = '❌ Заполните все поля!';
+        msgDiv.className = 'message error';
+        return;
+    }
+    let savedUser = localStorage.getItem('currentUser');
+    if (!savedUser) {
+        window.location.href = 'index.html';
+        return;
+    }
+    let user = JSON.parse(savedUser);
+    let response = await fetch('/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, address, date, time, service, payment })
+    });
+    let data = await response.json();
+    if (data.success) {
+        msgDiv.innerHTML = '✅ ' + data.message;
+        msgDiv.className = 'message success';
+        setTimeout(() => {
+            window.location.href = 'profile.html';
+        }, 1500);
+    } else {
+        msgDiv.innerHTML = '❌ Ошибка при создании заявки';
+        msgDiv.className = 'message error';
+    }
+}
+function goToNewOrder() {
+    window.location.href = 'new-order.html';
+}
+function goToProfile() {
+    window.location.href = 'profile.html';
+}
+function logout() {
+    localStorage.removeItem('currentUser');
+    window.location.href = 'index.html';
+}
+function adminLogout() {
+    localStorage.removeItem('isAdmin');
+    window.location.href = 'index.html';
+}
+if (window.location.pathname.includes('profile.html')) {
+    loadProfile();
+}
+if (window.location.pathname.includes('admin.html')) {
+    loadAdminPanel();
+}
+</script>
+<!-- server -->
+<script>
+const express = require('express');
+const app = express();
+app.use(express.json());
+app.use(express.static('.'));
+let users = [];
+let nextUserId = 1;
+app.post('/register', (req, res) => {
+    const { login, password, fio, phone, email } = req.body;
+    const userExists = users.find(u => u.login === login);
+    if (userExists) {
+        res.json({ success: false, message: 'Логин уже занят' });
+        return;
+    }
+    const newUser = {
+        id: nextUserId++,
+        login: login,
+        password: password,
+        fio: fio,
+        phone: phone,
+        email: email
+    };
+    users.push(newUser);
+    res.json({ success: true, message: 'Регистрация успешна!', userId: newUser.id });
+});
+app.post('/login', (req, res) => {
+    const { login, password } = req.body;
+    const user = users.find(u => u.login === login && u.password === password);
+    if (user) {
+        res.json({ 
+            success: true, 
+            message: 'Вход выполнен!', 
+            user: { id: user.id, login: user.login, fio: user.fio, phone: user.phone, email: user.email }
+        });
+    } else {
+        res.json({ success: false, message: 'Неверный логин или пароль' });
+    }
+});
+app.post('/admin-login', (req, res) => {
+    const { login, password } = req.body;
+    if (login === 'adminka' && password === 'password') {
+        res.json({ success: true, message: 'Добро пожаловать, админ!' });
+    } else {
+        res.json({ success: false, message: 'Неверный логин или пароль администратора' });
+    }
+});
+app.listen(3000, () => {
+    console.log('Сервер запущен на http://localhost:3000');
+});
+</script>
+<!-- proile -->
+<div class="container">
+        <h1>🧹 Мой профиль</h1>
+        <div class="card">
+            <h2>👤 Информация о пользователе</h2>
+            <div id="por"></div>
+        </div> 
+        <div class="card">
+            <h2>📋 История заявок</h2>
+            <div id="ordersList"></div>
+        </div> 
+        <div class="card">
+            <button onclick="goToNewOrder()" class="btn-primary">➕ Оставить новую заявку</button>
+            <button onclick="logout()" class="btn-secondary">🚪 Выйти</button>
+        </div>
+    </div>
+<!-- order -->
+     <div class="container">
+        <h1>🧹 Новая заявка</h1>
+        <div class="card">
+            <h2>📝 Заполните форму</h2>
+            <input type="text" id="orderAddress" placeholder="Адрес">
+            <input type="date" id="orderDate">
+            <input type="time" id="orderTime">
+            <select id="orderService">
+                <option value="">Выберите услугу</option>
+                <option value="Общий клининг">Общий клининг - 1500₽</option>
+                <option value="Генеральная уборка">Генеральная уборка - 3000₽</option>
+                <option value="Послестроительная уборка">Послестроительная уборка - 5000₽</option>
+                <option value="Химчистка ковров">Химчистка ковров - 4000₽</option>
+            </select>
+            <select id="orderPayment">
+                <option value="">Выберите оплату</option>
+                <option value="Наличные">Наличные</option>
+                <option value="Банковская карта">Банковская карта</option>
+            </select>
+            <button onclick="createOrder()" class="btn-primary">Отправить заявку</button>
+            <button onclick="goToProfile()" class="btn-secondary">Назад в профиль</button>
+            <div id="orderMsg" class="message"></div>
+        </div>
+    </div>
+<!-- admin -->
+    <div class="container">
+        <h1>👑 Панель администратора</h1>
+        <div class="card">
+            <h2>📋 Все заявки клиентов</h2>
+            <div id="allOrdersList"></div>
+        </div>
+        <div class="card">
+            <button onclick="adminLogout()" class="btn-secondary">🚪 Выйти из админки</button>
+        </div>
+    </div>
+<!-- РЕГИСТРАЦИЯ -->
+        <div class="card">
+            <h2>📝 Регистрация</h2>
+            <input type="text" id="regFio" placeholder="ФИО">
+            <input type="tel" id="regPhone" placeholder="Телефон">
+            <input type="email" id="regEmail" placeholder="Email">
+            <input type="text" id="regLogin" placeholder="Логин">
+            <input type="password" id="regPass" placeholder="Пароль">
+            <button onclick="register()">Зарегистрироваться</button>
+            <div id="regMsg" class="message"></div>
+        </div>
+<!-- адаптив -->
+<style>
+@media (max-width: 500px) {
+    .container {
+        max-width: 100%;
+    }
+    .card {
+        padding: 18px;
+    }
+    h1 {
+        font-size: 24px;
+    }
+} 
+</style>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+    .container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+h1 {
+    text-align: center;
+    color: white;
+    margin-bottom: 25px;
+    font-size: 28px;
+}
+.card {
+    background: white;
+    border-radius: 20px;
+    padding: 25px;
+    margin-bottom: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+h2 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 20px;
+}
+input, select {
+    width: 100%;
+    padding: 12px;
+    margin: 8px 0;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+input:focus, select:focus {
+    outline: none;
+    border-color: #667eea;
+}
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+.btn-primary {
+    background: #667eea;
+    color: white;
+}
+.btn-primary:hover {
+    background: #5a67d8;
+    transform: scale(1.02);
+}
+.btn-secondary {
+    background: #48bb78;
+    color: white;
+}
+.btn-secondary:hover {
+    background: #38a169;
+}
+.message {
+    text-align: center;
+    margin-top: 12px;
+    padding: 8px;
+    border-radius: 8px;
+    font-size: 14px;
+}
+.success {
+    background: #d4edda;
+    color: #155724;
+}
+.error {
+    background: #f8d7da;
+    color: #721c24;
+}
+.order-item {
+    background: #f8f9fa;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 10px;
+    border-left: 4px solid #667eea;
+}
+.order-status {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: bold;
+}
+.status-new {
+    background: #fef3c7;
+    color: #d97706;
+}
+.status-done {
+    background: #d1fae5;
+    color: #059669;
+}
+.status-cancel {
+    background: #fee2e2;
+    color: #dc2626;
+}
+.status-select {
+    margin-top: 8px;
+    padding: 6px;
+    width: auto;
+    display: inline-block;
+    margin-left: 10px;
+}
+#userInfo p {
+    margin: 8px 0;
+    padding: 5px 0;
+    border-bottom: 1px solid #eee;
+}
+</style>
